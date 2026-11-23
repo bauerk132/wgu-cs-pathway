@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b121b">
+  <meta name="description" content="A private degree planner and coursework tracker for WGU Computer Science.">
+  <title>WGU CS Pathway</title>
+  <link rel="icon" href="/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#dashboard"><img src="/mark.svg" width="37" height="37" alt=""><span>CS Pathway<small>WGU TRACKER</small></span></a>
+      <nav id="nav" aria-label="Main navigation"></nav>
+      <div class="aside-foot">
+        <a id="notion-link" target="_blank" rel="noopener noreferrer">Life HQ in Notion</a>
+        <a href="https://my.wgu.edu/" target="_blank" rel="noopener noreferrer">myWGU</a>
+      </div>
+    </aside>
+    <div class="workarea">
+      <header class="topbar">
+        <span id="breadcrumb">Overview</span>
+        <div class="top-actions"><span id="sync" role="status">Connecting…</span><button type="button" id="retry" class="quiet hidden">Retry</button></div>
+      </header>
+      <main id="main" tabindex="-1"><p class="loading">Loading your degree plan…</p></main>
+    </div>
+  </div>
+  <dialog id="editor" aria-labelledby="editor-title"></dialog>
+  <div id="toast" class="toast hidden" role="status"></div>
+  <input hidden type="file" id="backup-file" accept=".json,application/json">
+</body>
+</html>
+
