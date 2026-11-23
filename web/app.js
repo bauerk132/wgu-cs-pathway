@@ -213,7 +213,7 @@ function enrollment() {
 function connections() {
   return headline("Connections", "Use this tracker for your degree and bring the next action into the apps you already use.") +
     `<div class="connection-grid">
-      <section class="card connection"><div class="provider provider-notion">N</div><div><h2>Notion Life HQ</h2>${badge("Linked")}</div><p>Open your existing hub, School page, or degree plan reference.</p><div class="btn-row">${link(LINKS.notion,"Open Life HQ")}${link(LINKS.school,"School")}${link(LINKS.courseList,"Course list")}</div></section>
+      <section class="card connection"><div class="provider provider-notion">N</div><div><h2>Notion Life HQ</h2>${badge("Linked")}</div><p>Open your existing hub, School page, or degree plan reference.</p><div class="btn-row">${link(LINKS.notion,"Open Life HQ")}${link(LINKS.school,"School")}${link(LINKS.courseList,"Course list")}${button("notion-summary","Copy progress summary")}</div></section>
       <section class="card connection"><div class="provider provider-todoist">T</div><div><h2>Todoist</h2>${badge("Manual handoff")}</div><p>Copy a task with its course code and date. Open Todoist or pass the task to Claude to add.</p><div class="btn-row">${link(LINKS.todoist,"Open WGU in Todoist")}</div></section>
       <section class="card connection"><div class="provider provider-tasks">${icon("check")}</div><div><h2>Google Tasks</h2>${badge("Manual handoff")}</div><p>Copy an action and paste it into your list in Google Tasks.</p><div class="btn-row">${link(LINKS.tasks,"Open Google Tasks")}</div></section>
       <section class="card connection"><div class="provider provider-calendar">${icon("calendar")}</div><div><h2>Google Calendar</h2>${badge("Event draft")}</div><p>Use a saved action date to open a prefilled all-day event. Review it in Google Calendar before saving.</p><div class="btn-row">${link(LINKS.calendar,"Open Calendar")}${button("calendar-start","Draft term start")}</div></section>
@@ -346,8 +346,49 @@ function handoff(title, description, date) {
   showEditor("Send to another app", "TASK HANDOFF",
     `<p>Copy the task for your list, or open a Calendar draft. Calendar drafts include the title and date.</p>
     <label class="field">Task text<textarea id="handoff-text" rows="5" readonly>${escape(lines)}</textarea></label>
-    <div class="btn-row">${button("copy","Copy task")}${link(LINKS.todoist,"Todoist")}${link(LINKS.tasks,"Google Tasks")}${date ? link(calendarLink(title,date),"Google Calendar draft") : ""}</div>
+    <div class="btn-row">${button("copy","Copy task")}${date ? button("download-ics","Download .ics","button",`data-date="${escape(date)}"`) : ""}${link(LINKS.todoist,"Todoist")}${link(LINKS.tasks,"Google Tasks")}${date ? link(calendarLink(title,date),"Google Calendar draft") : ""}</div>
     ${date ? "" : "<p>Add a date to the saved task to draft a Calendar event.</p>"}`, button("close","Done"), "handoff");
+}
+function icalEscape(value) {
+  return String(value).replace(/\\/g,"\\\\").replace(/\r\n|\r|\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;");
+}
+function foldIcalLine(line) {
+  const chunks = [];
+  let chunk = "", bytes = 0;
+  const encoder = new TextEncoder();
+  for (const char of line) {
+    const size = encoder.encode(char).length;
+    if (bytes + size > 75) {
+      chunks.push(chunk);
+      chunk = " ";
+      bytes = 1;
+    }
+    chunk += char; bytes += size;
+  }
+  chunks.push(chunk);
+  return chunks.join("\r\n");
+}
+function downloadIcs(title, date) {
+  const next = new Date(date + "T00:00:00Z");
+  next.setUTCDate(next.getUTCDate() + 1);
+  const ymd = value => value.toISOString().slice(0,10).replaceAll("-","");
+  const stamp = new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d{3}/,"");
+  const lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//WGU CS Pathway//EN","CALSCALE:GREGORIAN","BEGIN:VEVENT",
+    `UID:${crypto.randomUUID()}@wgu-cs-pathway`,`DTSTAMP:${stamp}`,`DTSTART;VALUE=DATE:${ymd(new Date(date + "T00:00:00Z"))}`,
+    `DTEND;VALUE=DATE:${ymd(next)}`,`SUMMARY:${icalEscape(title)}`,"END:VEVENT","END:VCALENDAR"];
+  const blob = new Blob([lines.map(foldIcalLine).join("\r\n") + "\r\n"], {type:"text/calendar;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement("a"), {href:url, download:"wgu-task.ics"});
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+function notionSummary() {
+  const progress = totals(state);
+  const course = BY_CODE.get(state.currentCourse);
+  const current = course ? `${course[0]} · ${course[1]} (${STATUS_LABEL[record(state, course[0]).status]})` : "Not set";
+  return ["WGU B.S. Computer Science progress", `Progress: ${progress.cu} of 121 CUs and ${progress.courses} of 39 courses complete`, `Current course: ${current}`, `Target start date: ${dateLabel(state.enrollment.startDate)} (${state.enrollment.startStatus})`, `Accelerated scenario finish (estimate): ${dateLabel(termDates(state.enrollment.startDate, state.accelerationTerms)[1])}`].join("\n");
+}
+function showNotionSummary() {
+  showEditor("Copy progress summary", "NOTION LIFE HQ", `<p>Paste this snapshot into your Life HQ page.</p><label class="field">Progress summary<textarea id="notion-summary-text" rows="6" readonly>${escape(notionSummary())}</textarea></label>`, button("notion-copy","Copy summary"), "notion-summary");
 }
 function calendarLink(title, date) {
   const end = new Date(date + "T00:00:00Z");
@@ -478,6 +519,15 @@ document.addEventListener("click", async event => {
       field.select();
       showToast("Text selected. Use your device’s Copy command.");
     }
+  } else if (action === "download-ics") {
+    const field = document.querySelector("#handoff-text");
+    const title = field.value.split("\n")[0];
+    if (control.dataset.date) downloadIcs(title, control.dataset.date);
+  } else if (action === "notion-summary") showNotionSummary();
+  else if (action === "notion-copy") {
+    const field = document.querySelector("#notion-summary-text");
+    try { await navigator.clipboard.writeText(field.value); showToast("Progress summary copied."); }
+    catch { field.focus(); field.select(); showToast("Text selected. Use your device’s Copy command."); }
   } else if (action === "export") download();
   else if (action === "import") backup.click();
 });
